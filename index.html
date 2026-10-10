@@ -1,10 +1,474 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-    <title>我的第一個雲端網頁</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>台味豐閣 — Excel 歷史資料智慧點餐推薦系統</title>
+  <!-- 引入 SheetJS 函式庫以在瀏覽器端解析 Excel (.xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #1F497D;
+      --secondary: #4A90E2;
+      --bg: #F4F7FB;
+      --card-bg: #FFFFFF;
+      --text: #2C3E50;
+      --success: #27AE60;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background-color: var(--bg); color: var(--text); padding: 24px 16px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 { color: var(--primary); font-size: 26px; margin-bottom: 6px; }
+    header p { color: #666; font-size: 14px; }
+
+    /* 上傳區塊 */
+    .upload-section {
+      background: var(--card-bg);
+      border: 2px dashed #BDC3C7;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+      transition: all 0.3s;
+    }
+    .upload-section.loaded {
+      border: 2px solid var(--success);
+      background: #F4FBF7;
+    }
+    .file-input { display: none; }
+    .upload-btn {
+      display: inline-block;
+      background: var(--primary);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: 0.2s;
+    }
+    .upload-btn:hover { background: #16365C; }
+    .status-msg { margin-top: 10px; font-size: 14px; color: #555; }
+
+    /* 搜尋區塊 */
+    .search-box {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .input-group { flex: 1; min-width: 260px; }
+    .input-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 6px; color: var(--primary); }
+    .input-group input {
+      width: 100%; padding: 10px 14px; border: 1.5px solid #D0D7DE; border-radius: 8px; font-size: 15px; outline: none; transition: 0.2s;
+    }
+    .input-group input:focus { border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(74,144,226,0.15); }
+    .btn {
+      padding: 10px 24px; background: var(--primary); color: #FFF; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s;
+    }
+    .btn:hover { background: #16365C; }
+    .btn:disabled { background: #BDC3C7; cursor: not-allowed; }
+
+    /* 顧客狀態面板 */
+    .user-profile {
+      background: var(--card-bg); border-left: 5px solid var(--primary); border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .user-profile h3 { font-size: 17px; margin-bottom: 8px; }
+    .user-history-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; max-height: 120px; overflow-y: auto; }
+    .history-badge { background: #EBF3FB; color: #1F497D; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+
+    /* 推薦卡片佈局 */
+    .section-title { font-size: 18px; color: var(--primary); margin-bottom: 14px; font-weight: bold; }
+    .cards-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; margin-bottom: 30px;
+    }
+    .card {
+      background: var(--card-bg); border-radius: 12px; padding: 18px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; border-top: 4px solid var(--secondary); transition: transform 0.2s;
+    }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.09); }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .dish-title { font-size: 17px; font-weight: bold; color: #222; }
+    .dish-code { font-size: 12px; color: #888; font-family: monospace; }
+    .category-badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; color: #fff; font-weight: bold; }
+    .price-tag { font-size: 18px; font-weight: bold; color: #E74C3C; margin: 8px 0; }
+    .reason-box {
+      background: #F9FAFC; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #555; border: 1px dashed #D0D7DE; margin-top: 8px; line-height: 1.5;
+    }
+    .reason-box strong { color: var(--primary); }
+    .empty-state { text-align: center; padding: 40px 20px; color: #777; background: #fff; border-radius: 12px; }
+  </style>
 </head>
-<body style="text-align:center; padding-top:50px; font-family:sans-serif;">
-    <h1>Hello Cloud Computing! ☁️ My KSU student ID </h1>
-    <p>這是我第一次把檔案放到雲端伺服器上供全世界存取！</p>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🍲 台味豐閣 — Excel 歷史資料智慧推薦系統</h1>
+    <p>讀取「台式餐廳客戶點餐資料檔.xlsx」｜ 資料探勘協同過濾 (Collaborative Filtering) 演算法</p>
+  </header>
+
+  <!-- 1. 檔案載入區 -->
+  <div class="upload-section" id="dropArea">
+    <h3 id="uploadTitle">📂 第一步：載入點餐歷史 Excel 檔案</h3>
+    <p style="font-size:13px; color:#666; margin-top:4px;">請選擇剛才建立的「台式餐廳客戶點餐資料檔.xlsx」</p>
+    <label class="upload-btn" for="excelFileInput">選取 Excel 檔案</label>
+    <input type="file" id="excelFileInput" class="file-input" accept=".xlsx, .xls">
+    <div class="status-msg" id="fileStatus">尚未載入檔案</div>
+  </div>
+
+  <!-- 2. 查詢區塊 -->
+  <div class="search-box">
+    <div class="input-group">
+      <label for="custInput">第二步：輸入消費者編號或姓名</label>
+      <input type="text" id="custInput" placeholder="請先載入 Excel 檔，再輸入編號或姓名（例如：蕭雅涵 或 CUST-1049）" disabled>
+    </div>
+    <button class="btn" id="recommendBtn" onclick="executeRecommendation()" disabled>開始智慧推薦</button>
+  </div>
+
+  <!-- 3. 消費者檔案展示區 -->
+  <div id="userProfileArea"></div>
+
+  <!-- 4. 推薦結果區 -->
+  <div id="recommendArea">
+    <div class="empty-state">載入 Excel 檔並輸入顧客資訊後，系統將在此呈現專屬推薦菜色。</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 全域狀態：儲存從 Excel 解析出的資料
+// ============================================================
+let menuList = [];          // 菜單主檔清單
+let menuMap = new Map();     // 菜品快速查詢 Map
+let orderRecords = [];      // 訂單歷史紀錄
+let customerMap = new Map(); // 客戶編號 <-> 姓名對照表
+let userDishMatrix = {};    // 顧客-菜品矩陣: { custId: { dishCode: 總份數 } }
+let userCategoryStats = {}; // 顧客-分類偏好: { custId: { category: 總份數 } }
+let globalDishPopularity = {}; // 全域菜品熱銷統計
+
+// 分類顏色標籤配置
+const CATEGORY_COLORS = {
+  "冷盤": "#16A085",
+  "肉品": "#E74C3C",
+  "海鮮": "#3498DB",
+  "蔬菜": "#27AE60",
+  "湯品": "#E67E22",
+  "主食": "#F39C12",
+  "飲品": "#9B59B6"
+};
+
+// ============================================================
+// 1. 檔案讀取與解析 (透過 SheetJS 解析 Excel)
+// ============================================================
+document.getElementById('excelFileInput').addEventListener('change', handleFileUpload);
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+
+      parseExcelData(workbook);
+
+      // 更新介面狀態
+      const dropArea = document.getElementById('dropArea');
+      dropArea.classList.add('loaded');
+      document.getElementById('uploadTitle').innerText = '✅ Excel 檔案讀取成功！';
+      document.getElementById('fileStatus').innerHTML = 
+        `成功載入 <strong>${orderRecords.length}</strong> 筆點餐紀錄、<strong>${menuList.length}</strong> 項台式菜品，涵蓋 <strong>${customerMap.size}</strong> 位顧客。`;
+
+      // 啟用查詢功能
+      document.getElementById('custInput').disabled = false;
+      document.getElementById('custInput').placeholder = "例：輸入 蕭雅涵、葉宜君 或 CUST-1049、CUST-1002";
+      document.getElementById('recommendBtn').disabled = false;
+    } catch (err) {
+      alert("解析 Excel 檔案失敗，請確認檔案格式是否正確！" + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseExcelData(workbook) {
+  // 重置快取
+  menuList = [];
+  menuMap.clear();
+  orderRecords = [];
+  customerMap.clear();
+  userDishMatrix = {};
+  userCategoryStats = {};
+  globalDishPopularity = {};
+
+  // 1.1 解析「菜品主檔目錄」工作表
+  const menuSheetName = workbook.SheetNames.find(n => n.includes("菜品")) || workbook.SheetNames[1];
+  if (menuSheetName && workbook.Sheets[menuSheetName]) {
+    const rawMenu = XLSX.utils.sheet_to_json(workbook.Sheets[menuSheetName], { header: 1 });
+    // 略過前三列標題與表頭，從第四列 (index 4) 開始讀取
+    for (let i = 4; i < rawMenu.length; i++) {
+      const row = rawMenu[i];
+      if (!row || !row[0]) continue;
+      const item = {
+        dishCode: String(row[0]).trim(),
+        dishName: String(row[1]).trim(),
+        category: String(row[2]).trim(),
+        price: Number(row[3]) || 0
+      };
+      menuList.push(item);
+      menuMap.set(item.dishCode, item);
+    }
+  }
+
+  // 1.2 解析「點餐明細資料」工作表
+  const dataSheetName = workbook.SheetNames.find(n => n.includes("明細") || n.includes("點餐")) || workbook.SheetNames[0];
+  const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[dataSheetName], { header: 1 });
+
+  // 略過標題，從資料列 (index 4) 開始讀取
+  for (let i = 4; i < rawData.length; i++) {
+    const row = rawData[i];
+    if (!row || !row[3] || String(row[0]).includes("合計")) continue;
+
+    const custId = String(row[3]).trim();
+    const custName = String(row[4]).trim();
+    const category = String(row[5]).trim();
+    const dishCode = String(row[6]).trim();
+    const dishName = String(row[7]).trim();
+    const qty = Number(row[8]) || 1;
+    const price = Number(row[9]) || 0;
+
+    orderRecords.push({ custId, custName, category, dishCode, dishName, qty, price });
+    customerMap.set(custId, custName);
+    customerMap.set(custName, custId); // 雙向索引
+
+    // 建構菜單備援（若目錄表中缺漏時自動補上）
+    if (!menuMap.has(dishCode)) {
+      const item = { dishCode, dishName, category, price };
+      menuList.push(item);
+      menuMap.set(dishCode, item);
+    }
+
+    // 累積點餐互動矩陣
+    if (!userDishMatrix[custId]) userDishMatrix[custId] = {};
+    userDishMatrix[custId][dishCode] = (userDishMatrix[custId][dishCode] || 0) + qty;
+
+    // 累積顧客分類喜好
+    if (!userCategoryStats[custId]) userCategoryStats[custId] = {};
+    userCategoryStats[custId][category] = (userCategoryStats[custId][category] || 0) + qty;
+
+    // 全域熱門程度
+    globalDishPopularity[dishCode] = (globalDishPopularity[dishCode] || 0) + qty;
+  }
+}
+
+// ============================================================
+// 2. 資料探勘推薦演算法 (Collaborative Filtering + Cosine Sim)
+// ============================================================
+
+// 計算兩個向量之餘弦相似度
+function calculateCosineSimilarity(userA, userB) {
+  const vecA = userDishMatrix[userA];
+  const vecB = userDishMatrix[userB];
+  if (!vecA || !vecB) return 0;
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let d in vecA) normA += vecA[d] ** 2;
+  for (let d in vecB) normB += vecB[d] ** 2;
+  for (let d in vecA) {
+    if (vecB[d]) dotProduct += vecA[d] * vecB[d];
+  }
+
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// 核心推薦邏輯
+function getRecommendations(targetCustId, topN = 6) {
+  const eatenDishCodes = new Set(Object.keys(userDishMatrix[targetCustId] || {}));
+  const targetCategoryStats = userCategoryStats[targetCustId] || {};
+
+  // 1. 尋找口味最相近之其他顧客
+  const neighbors = [];
+  for (let otherId in userDishMatrix) {
+    if (otherId !== targetCustId) {
+      const sim = calculateCosineSimilarity(targetCustId, otherId);
+      if (sim > 0) neighbors.push({ custId: otherId, sim });
+    }
+  }
+  neighbors.sort((a, b) => b.sim - a.sim);
+
+  // 2. 探勘未點過菜品的喜好預測分數
+  const candidateScores = {};
+
+  neighbors.forEach(({ custId, sim }) => {
+    const dishes = userDishMatrix[custId];
+    for (let dishCode in dishes) {
+      // 關鍵條件：必須為目標顧客「從未點過」之品項
+      if (!eatenDishCodes.has(dishCode)) {
+        if (!candidateScores[dishCode]) {
+          candidateScores[dishCode] = { score: 0, peerCount: 0, peakSim: sim };
+        }
+        candidateScores[dishCode].score += sim * dishes[dishCode];
+        candidateScores[dishCode].peerCount += 1;
+      }
+    }
+  });
+
+  // 3. 結合顧客歷史類別偏好（如特別偏好海鮮或肉品）加權
+  const rankedDishes = [];
+  for (let dishCode in candidateScores) {
+    const item = menuMap.get(dishCode);
+    if (!item) continue;
+    const catWeight = (targetCategoryStats[item.category] || 1);
+    const finalScore = candidateScores[dishCode].score * (1 + Math.log1p(catWeight));
+
+    rankedDishes.push({
+      ...item,
+      score: finalScore,
+      reason: `與您點餐喜好相似的老饕推薦，且符合您常點的「${item.category}」口味！`
+    });
+  }
+
+  // 4. 若候選數量不足 Top-N（冷啟動或交集少），以全店未點過之熱銷菜色遞補
+  if (rankedDishes.length < topN) {
+    const popularFallbacks = [...menuList]
+      .filter(d => !eatenDishCodes.has(d.dishCode) && !candidateScores[d.dishCode])
+      .sort((a, b) => (globalDishPopularity[b.dishCode] || 0) - (globalDishPopularity[a.dishCode] || 0));
+
+    popularFallbacks.forEach(dish => {
+      if (rankedDishes.length < topN) {
+        rankedDishes.push({
+          ...dish,
+          score: (globalDishPopularity[dish.dishCode] || 1) * 0.1,
+          reason: `全店人氣熱門榜推薦，值得您首次品嚐！`
+        });
+      }
+    });
+  }
+
+  rankedDishes.sort((a, b) => b.score - a.score);
+
+  return {
+    recommendations: rankedDishes.slice(0, topN),
+    eatenList: Array.from(eatenDishCodes).map(code => menuMap.get(code)).filter(Boolean)
+  };
+}
+
+// ============================================================
+// 3. 畫面互動與渲染
+// ============================================================
+function executeRecommendation() {
+  const query = document.getElementById('custInput').value.trim();
+  const profileArea = document.getElementById('userProfileArea');
+  const recArea = document.getElementById('recommendArea');
+
+  if (!query) {
+    alert("請輸入消費者編號或姓名！");
+    return;
+  }
+
+  // 判斷輸入的是 ID 還是 姓名
+  let targetCustId = null;
+  let targetCustName = null;
+
+  if (customerMap.has(query)) {
+    // 若匹配到
+    if (query.startsWith("CUST-")) {
+      targetCustId = query;
+      targetCustName = customerMap.get(query);
+    } else {
+      targetCustName = query;
+      targetCustId = customerMap.get(query);
+    }
+  } else {
+    // 大小寫不拘再尋找一次
+    for (let [k, v] of customerMap.entries()) {
+      if (k.toLowerCase() === query.toLowerCase()) {
+        if (k.startsWith("CUST-")) {
+          targetCustId = k;
+          targetCustName = v;
+        } else {
+          targetCustName = k;
+          targetCustId = v;
+        }
+        break;
+      }
+    }
+  }
+
+  if (!targetCustId) {
+    profileArea.innerHTML = "";
+    recArea.innerHTML = `<div class="empty-state">❌ 在 Excel 資料庫中找不到「${query}」的紀錄，請確認輸入是否正確。</div>`;
+    return;
+  }
+
+  // 執行推薦
+  const result = getRecommendations(targetCustId, 6);
+
+  // 3.1 渲染顧客歷史點餐卡片（確保清楚證明推薦的菜品皆未在已點名單中）
+  const eatenChips = result.eatenList.length > 0
+    ? result.eatenList.map(d => `<span class="history-badge">✓ ${d.dishName} (${d.category})</span>`).join("")
+    : '<span style="color:#888;">查無過往點餐紀錄</span>';
+
+  profileArea.innerHTML = `
+    <div class="user-profile">
+      <h3>👤 消費者檔案：${targetCustName} <span style="font-size:13px; color:#666; font-weight:normal;">[編號: ${targetCustId}]</span></h3>
+      <p style="font-size:13px; color:#555;">歷史已點過菜色（共 <strong>${result.eatenList.length}</strong> 項，推薦系統已徹底過濾排除）：</p>
+      <div class="user-history-tags">${eatenChips}</div>
+    </div>
+  `;
+
+  // 3.2 渲染推薦清單卡片
+  if (result.recommendations.length === 0) {
+    recArea.innerHTML = `<div class="empty-state">該顧客已點過所有菜品，暫無未點過項目可推薦。</div>`;
+    return;
+  }
+
+  let html = `
+    <div class="section-title">✨ 專屬探勘推薦 — 6 道從未點過的精緻台菜</div>
+    <div class="cards-grid">
+  `;
+
+  result.recommendations.forEach((dish, idx) => {
+    const badgeColor = CATEGORY_COLORS[dish.category] || "#666";
+    html += `
+      <div class="card">
+        <div>
+          <div class="card-top">
+            <div>
+              <div class="dish-title">${idx + 1}. ${dish.dishName}</div>
+              <div class="dish-code">${dish.dishCode}</div>
+            </div>
+            <span class="category-badge" style="background:${badgeColor}">${dish.category}</span>
+          </div>
+          <div class="price-tag">NT$ ${dish.price}</div>
+        </div>
+        <div class="reason-box">
+          💡 <strong>推薦原因：</strong>${dish.reason}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  recArea.innerHTML = html;
+}
+
+// 支援按 Enter 鍵快速搜尋
+document.getElementById('custInput').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') executeRecommendation();
+});
+</script>
+
 </body>
 </html>
